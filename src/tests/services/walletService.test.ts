@@ -1,8 +1,9 @@
 // Exemple pour walletService.test.ts
 import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
-import { User } from "../../models/User";
+import { UserDocument } from "../../models/User";
 import Wallet from "../../models/Wallet";
+import authService from "../../services/authService";
 import walletService from "../../services/walletService";
 
 let mongoServer: MongoMemoryServer;
@@ -13,18 +14,16 @@ beforeAll(async () => {
   const uri = mongoServer.getUri();
   await mongoose.connect(uri);
 
-  // Créer un utilisateur de test
-  const testUser = new User({
-    email: "wallet-test@example.com",
-    password: "password123",
-    authMethod: "email",
-    userReferralCode: "TEST123",
-    formFullfilled: false,
-    wallets: [],
-    kycStatus: "none",
-  });
-  await testUser.save();
-  testUserId = testUser._id.toString();
+  // Créer un utilisateur de test via le service d'authentification
+  const { user } = (await authService.registerWithEmail(
+    "wallet-test@example.com",
+    "password123",
+    undefined,
+    undefined,
+    undefined,
+    true // isVerified = true pour éviter les problèmes de vérification
+  )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
+  testUserId = user._id.toString();
 });
 
 afterAll(async () => {

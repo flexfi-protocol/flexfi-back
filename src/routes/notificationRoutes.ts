@@ -19,4 +19,7 @@ router.put('/:id/read', notificationController.markAsRead);
 // Mark all notifications as read
 router.put('/read-all', notificationController.markAllAsRead);
 
+// Create Zealy connection notification
+router.post('/create-zealy-notification', notificationController.createZealyNotification);
+
 export default router; 

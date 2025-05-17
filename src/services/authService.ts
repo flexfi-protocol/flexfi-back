@@ -1,3 +1,5 @@
+import axios from "axios";
+import { zealyConfig } from "../config/zealy";
 import { User, UserDocument } from "../models/User";
 import {
   AppError,
@@ -7,6 +9,7 @@ import {
   UnauthorizedError,
 } from "../utils/AppError";
 import { generateToken } from "../utils/jwt";
+import logger from "../utils/logger";
 import brevoService from "./brevoService";
 
 export class AuthService {
@@ -57,19 +60,13 @@ export class AuthService {
 
       // Vérifier et appliquer les points de parrainage
       if (referralCodeUsed) {
-        await User.findOneAndUpdate(
-          { userReferralCode: referralCodeUsed.toUpperCase() },
-          {
-            $inc: {
-              flexpoints_native: 5,
-              flexpoints_total: 5,
-            },
-          }
-        );
+        const referrer = await User.findOne({
+          userReferralCode: referralCodeUsed.toUpperCase(),
+        });
+        if (referrer) {
+          await referrer.addNativePoints(5);
+        }
       }
-
-      //  Envoie le mail avec le code de vérification
-      await brevoService.sendVerificationEmail(user.email);
 
       return { user, token, verificationCode };
     } catch (error: any) {
@@ -169,16 +166,6 @@ export class AuthService {
     }
   }
 
-  async handleReferralPoints(referralCodeUsed: string) {
-    const user = await User.findOne({ userReferralCode: referralCodeUsed });
-    if (!user) {
-      throw NotFoundError("User not found");
-    }
-    // Add points to the user
-    user.flexpoints_native += 5;
-    await user.save();
-  }
-
   private generateReferralCode(): string {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let code = "";
@@ -201,6 +188,7 @@ export class AuthService {
   async getTopReferrals(): Promise<UserDocument[]> {
     try {
       const topReferrals = await User.find()
+        .select("email firstName lastName flexpoints_total userReferralCode")
         .sort({ flexpoints_total: -1 })
         .limit(10);
 
@@ -238,7 +226,33 @@ export class AuthService {
       if (!user) {
         throw NotFoundError("User not found");
       }
-      return user.flexpoints_total || 0;
+
+      // Si l'utilisateur a un compte Zealy, synchroniser les points
+      if (user.zealy_id) {
+        try {
+          const response = await axios.get(
+            `${zealyConfig.apiUrl}/communities/${zealyConfig.communityId}/users/${user.zealy_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${zealyConfig.apiKey}`,
+              },
+            }
+          );
+
+          const { points } = response.data;
+
+          // Mettre à jour les points Zealy en utilisant la méthode du modèle
+          const updatedUser = await user.addZealyPoints(points);
+          return updatedUser.flexpoints_total || 0;
+        } catch (error) {
+          logger.error("Failed to sync Zealy points:", error);
+          // En cas d'erreur de synchronisation, on continue avec les points actuels
+        }
+      }
+
+      // Récupérer l'utilisateur mis à jour
+      const updatedUser = await User.findById(userId);
+      return updatedUser?.flexpoints_total || 0;
     } catch (error: any) {
       if (error instanceof AppError) throw error;
       throw InternalError(`Failed to get user points: ${error.message}`);
@@ -284,6 +298,9 @@ export class AuthService {
     user.isVerified = true;
     user.verificationCode = "";
     await user.save();
+
+    // Ajouter les points de vérification
+    await user.addNativePoints(100);
   }
 
   async resendVerificationEmail(email: string): Promise<void> {

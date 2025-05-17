@@ -18,6 +18,7 @@ export const zealyConfig = {
   clientId: env.ZEALY_CLIENT_ID,
   clientSecret: env.ZEALY_CLIENT_SECRET,
   redirectUri: env.ZEALY_REDIRECT_URI,
+  frontendRedirectUrl: env.ZEALY_FRONTEND_REDIRECT_URL || "https://www.flex-fi.io/dashboard",
   scopes: ["user:read", "points:read"],
 
   // ==========================================

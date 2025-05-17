@@ -5,53 +5,73 @@ import logger from "../utils/logger";
 
 async function syncZealyPoints() {
   try {
-    // Récupérer tous les utilisateurs avec un zealy_id
-    const users = await User.find({ zealy_id: { $exists: true } });
+    logger.info("Starting Zealy points synchronization");
 
-    for (const user of users) {
+    // Fetch the leaderboard from Zealy API
+    const leaderboardResponse = await axios.get(
+      `${zealyConfig.apiUrl}/public/communities/${zealyConfig.communityId}/leaderboard`,
+      {
+        params: {
+          page: 1,
+          limit: 100 // Adjust as needed
+        },
+        headers: {
+          "x-api-key": zealyConfig.apiKey
+        }
+      }
+    );
+
+    if (!leaderboardResponse.data || !leaderboardResponse.data.data) {
+      logger.error("Invalid leaderboard response from Zealy API");
+      return;
+    }
+
+    const leaderboard = leaderboardResponse.data.data;
+    logger.info(`Retrieved ${leaderboard.length} users from Zealy leaderboard`);
+
+    let updatedCount = 0;
+    let errorCount = 0;
+    let notFoundCount = 0;
+
+    // Process each user in the leaderboard
+    for (const zealyUser of leaderboard) {
       try {
-        // Récupérer les points Zealy
-        const response = await axios.get(
-          `${zealyConfig.apiUrl}/communities/${zealyConfig.communityId}/users/${user.zealy_id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${zealyConfig.apiKey}`,
-            },
-          }
-        );
+        if (!zealyUser.userId) {
+          logger.warn("Skipping leaderboard entry with missing userId");
+          continue;
+        }
 
-        const { points } = response.data;
+        // Find user in our database with matching zealy_id
+        const user = await User.findOne({ zealy_id: zealyUser.userId });
+        
+        if (!user) {
+          notFoundCount++;
+          logger.debug(`No user found with Zealy ID: ${zealyUser.userId}`);
+          continue;
+        }
 
-        // Mettre à jour les points Zealy et totaux
-        await User.findByIdAndUpdate(
-          user._id,
-          {
-            $set: { flexpoints_zealy: points },
-            $expr: {
-              $set: {
-                flexpoints_total: {
-                  $add: ["$flexpoints_native", points],
-                },
-              },
-            },
-          },
-          { new: true }
-        );
+        // Update user points using the setZealyPoints method
+        await user.setZealyPoints(zealyUser.xp || 0);
+        
+        // Update discord handle if available and different
+        if (zealyUser.discordHandle && zealyUser.discordHandle !== user.discord_handle) {
+          user.discord_handle = zealyUser.discordHandle;
+          await user.save();
+        }
 
-        logger.info(`Points synchronisés pour l'utilisateur ${user._id}`);
+        updatedCount++;
+        logger.debug(`Updated points for user ${user._id}: ${zealyUser.xp} points`);
       } catch (error) {
-        logger.error(
-          `Erreur lors de la synchronisation pour l'utilisateur ${user._id}:`,
-          error
-        );
+        errorCount++;
+        logger.error(`Error updating user with Zealy ID ${zealyUser.userId}:`, error);
       }
     }
 
-    logger.info("Synchronisation des points Zealy terminée");
+    logger.info(`Zealy points synchronization completed. Updated: ${updatedCount}, Not found: ${notFoundCount}, Errors: ${errorCount}`);
   } catch (error) {
-    logger.error("Erreur lors de la synchronisation des points Zealy:", error);
+    logger.error("Error during Zealy points synchronization:", error);
   }
 }
 
-// Exécuter le script
+// Execute the script
 syncZealyPoints();

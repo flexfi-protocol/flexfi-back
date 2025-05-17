@@ -33,6 +33,7 @@ beforeEach(async () => {
     firstName: "Test",
     lastName: "User",
     userReferralCode: "FLEX-ABC123", // Format correct : FLEX- suivi de 6 caractères
+    verificationCode: "FLEX-TEST01",
     formFullfilled: false,
     wallets: [],
     kycStatus: "pending",

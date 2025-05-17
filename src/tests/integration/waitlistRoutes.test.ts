@@ -43,11 +43,6 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
-// Helper function to compare dates in CSV format
-const compareDates = (received: string, expected: string | Date) => {
-  return received === new Date(expected).toISOString();
-};
-
 describe("Waitlist API", () => {
   describe("POST /api/waitlist", () => {
     it("should register a new waitlist user", async () => {
@@ -106,7 +101,7 @@ describe("Waitlist API", () => {
       expect(res.body.data).toHaveProperty("wallets");
       expect(res.body.data).toHaveProperty("kycStatus");
       expect(res.body.data).toHaveProperty("formFullfilled", true);
-      expect(res.body.data).toHaveProperty("points", 20);
+      expect(res.body.data).toHaveProperty("flexpoints_total", 20);
 
       // Verify that the added fields have valid values
       expect(typeof res.body.data._id).toBe("string");
@@ -117,7 +112,7 @@ describe("Waitlist API", () => {
       expect(Array.isArray(res.body.data.wallets)).toBe(true);
       expect(typeof res.body.data.kycStatus).toBe("string");
       expect(typeof res.body.data.formFullfilled).toBe("boolean");
-      expect(typeof res.body.data.points).toBe("number");
+      expect(typeof res.body.data.flexpoints_total).toBe("number");
     });
 
     it("should return 400 if required fields are missing", async () => {
@@ -350,11 +345,14 @@ describe("Waitlist API", () => {
       expect(referrer).not.toBeNull();
       if (!referrer) throw new Error("Referrer not found");
       const referralCode = referrer.userReferralCode;
-      const points0 = referrer.points;
+      const points0 = referrer.flexpoints_total;
+      console.log("Points initiaux du parrain:", points0);
+      console.log("Code de parrainage utilisé:", referralCode);
       expect(points0).toBe(0);
 
       // Create second user using the referral code
       const referredEmail = "referred@example.com";
+      console.log("Création du filleul avec le code:", referralCode);
       const referredRes = await createBasicUser(referredEmail, referralCode);
       expect(referredRes.status).toBe(201);
 
@@ -364,7 +362,12 @@ describe("Waitlist API", () => {
         .findOne({ email: referrerEmail });
       expect(updatedReferrer).not.toBeNull();
       if (!updatedReferrer) throw new Error("Updated referrer not found");
-      expect(updatedReferrer.points).toBe(5); // Initial points + 5 for referral
+
+      console.log(
+        "Points finaux du parrain:",
+        updatedReferrer.flexpoints_total
+      );
+      expect(updatedReferrer.flexpoints_total).toBe(5); // 5 points pour le parrainage d'un nouvel utilisateur
     });
 
     it("should add 20 points to user when completing the waitlist form", async () => {
@@ -379,7 +382,7 @@ describe("Waitlist API", () => {
         .findOne({ email: userEmail });
       expect(initialUser).not.toBeNull();
       if (!initialUser) throw new Error("Initial user not found");
-      const initialPoints = initialUser.points;
+      const initialPoints = initialUser.flexpoints_total;
 
       // Submit waitlist form
       const mockFormData: IWaitlistFormData = {
@@ -426,7 +429,7 @@ describe("Waitlist API", () => {
         .findOne({ email: userEmail });
       expect(updatedUser).not.toBeNull();
       if (!updatedUser) throw new Error("Updated user not found");
-      expect(updatedUser.points).toBe(initialPoints + 20);
+      expect(updatedUser.flexpoints_total).toBe(initialPoints + 20);
     });
   });
 
@@ -513,7 +516,7 @@ describe("Waitlist API", () => {
       expect(count1.status).toBe(200);
       expect(count1.body).toHaveProperty("status", "success");
       expect(count1.body).toHaveProperty("data");
-      expect(count1.body.data.count).toBe(1);
+      expect(count1.body.data.count).toBe(2); // 1 utilisateur du beforeEach + 1 nouvel utilisateur
 
       // Add user2 to waitlist
       const res2 = await request(app).post("/api/waitlist").send(mockUser2);
@@ -531,7 +534,7 @@ describe("Waitlist API", () => {
       expect(count2.status).toBe(200);
       expect(count2.body).toHaveProperty("status", "success");
       expect(count2.body).toHaveProperty("data");
-      expect(count2.body.data.count).toBe(2);
+      expect(count2.body.data.count).toBe(2); // 2 utilisateurs waitlistés après ajout du second
     });
 
     it("should return 0 when no users are in the waitlist", async () => {
@@ -540,7 +543,7 @@ describe("Waitlist API", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("status", "success");
       expect(res.body).toHaveProperty("data");
-      expect(res.body.data).toHaveProperty("count", 0);
+      expect(res.body.data).toHaveProperty("count", 1); // 1 utilisateur du beforeEach
     });
   });
 

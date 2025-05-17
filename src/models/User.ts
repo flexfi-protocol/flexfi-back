@@ -229,6 +229,9 @@ export type UserSchemaType = {
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
+  addNativePoints(points: number): Promise<UserDocument>;
+  addZealyPoints(points: number): Promise<UserDocument>;
+  setZealyPoints(points: number): Promise<UserDocument>;
 };
 
 // Type pour le document Mongoose
@@ -328,6 +331,52 @@ UserSchema.pre<UserDocument>("save", async function (next) {
     next();
   }
 });
+
+// Méthodes pour gérer les points
+UserSchema.methods.addNativePoints = async function (
+  points: number
+): Promise<UserDocument> {
+  const updatedUser = await User.findByIdAndUpdate(
+    this._id,
+    {
+      $inc: {
+        flexpoints_native: points,
+        flexpoints_total: points,
+      },
+    },
+    { new: true }
+  );
+
+  if (!updatedUser) {
+    throw new Error("Failed to update user points");
+  }
+
+  return updatedUser;
+};
+
+UserSchema.methods.setZealyPoints = async function (
+  points: number
+): Promise<UserDocument> {
+  // Récupérer les points natifs actuels
+  const nativePoints = this.flexpoints_native || 0;
+
+  const updatedUser = await User.findByIdAndUpdate(
+    this._id,
+    {
+      $set: {
+        flexpoints_zealy: points,
+        flexpoints_total: nativePoints + points,
+      },
+    },
+    { new: true }
+  );
+
+  if (!updatedUser) {
+    throw new Error("Failed to update user points");
+  }
+
+  return updatedUser;
+};
 
 // Méthode pour comparer les mots de passe
 UserSchema.methods.comparePassword = async function (

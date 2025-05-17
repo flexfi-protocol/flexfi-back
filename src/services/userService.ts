@@ -1,8 +1,8 @@
-import { IUser, User } from "../models/User";
+import { IUser, User, UserDocument } from "../models/User";
 
 export class UserService {
   // Récupérer un utilisateur par ID
-  async getUserById(id: string): Promise<IUser | null> {
+  async getUserById(id: string): Promise<UserDocument | null> {
     try {
       return await User.findById(id);
     } catch (error) {
@@ -11,7 +11,7 @@ export class UserService {
   }
 
   // Récupérer un utilisateur par email
-  async getUserByEmail(email: string): Promise<IUser | null> {
+  async getUserByEmail(email: string): Promise<UserDocument | null> {
     try {
       return await User.findOne({ email });
     } catch (error) {
@@ -20,7 +20,10 @@ export class UserService {
   }
 
   // Mettre à jour les informations d'un utilisateur
-  async updateUser(id: string, updates: Partial<IUser>): Promise<IUser | null> {
+  async updateUser(
+    id: string,
+    updates: Partial<IUser>
+  ): Promise<UserDocument | null> {
     try {
       return await User.findByIdAndUpdate(id, updates, { new: true });
     } catch (error) {

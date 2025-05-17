@@ -51,22 +51,6 @@ jest.mock('pdfkit', () => {
   }));
 });
 
-// Override the implementation of generatePDF to directly return a path
-jest.mock('../../services/loiService', () => {
-  const original = jest.requireActual('../../services/loiService').default;
-  
-  return {
-    __esModule: true,
-    default: {
-      ...original,
-      generatePDF: jest.fn().mockImplementation((loiData) => {
-        return Promise.resolve(`/uploads/loi/LOI_FlexFi_${loiData.company.replace(/\s+/g, '_')}_2023-01-01T00-00-00.pdf`);
-      }),
-      sendEmail: jest.fn().mockResolvedValue(undefined),
-    },
-  };
-});
-
 describe('LOI Service', () => {
   let mongoServer: MongoMemoryServer;
 
@@ -84,6 +68,10 @@ describe('LOI Service', () => {
   beforeEach(async () => {
     await LOI.deleteMany({});
     jest.clearAllMocks();
+    jest.spyOn(loiService, 'generatePDF').mockImplementation((loiData: any) => {
+      return Promise.resolve(`/uploads/loi/LOI_FlexFi_${loiData.company.replace(/\s+/g, '_')}_2023-01-01T00-00-00.pdf`);
+    });
+    jest.spyOn(loiService, 'sendEmail').mockResolvedValue(undefined);
   });
 
   describe('createLOI', () => {

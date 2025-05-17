@@ -1,6 +1,7 @@
 import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
-import { User } from "../../models/User";
+import { User, UserDocument } from "../../models/User";
+import authService from "../../services/authService";
 import userService from "../../services/userService";
 
 let mongoServer: MongoMemoryServer;
@@ -22,66 +23,47 @@ beforeEach(async () => {
 
 describe("UserService", () => {
   it("should create a new user", async () => {
-    // Créer un utilisateur pour le test
-    const mockUser = new User({
-      email: "test@example.com",
-      password: "password123",
-      firstName: "Test",
-      lastName: "User",
-      authMethod: "email",
-      userReferralCode: "TEST123",
-      formFullfilled: false,
-      wallets: [],
-      kycStatus: "none",
-    });
+    const { user: mockUser } = (await authService.registerWithEmail(
+      "test@example.com",
+      "password123",
+      "Test",
+      "User",
+      undefined,
+      true
+    )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
 
-    await mockUser.save();
-
-    // Tester getUserById
     const foundUser = await userService.getUserById(mockUser._id.toString());
     expect(foundUser).not.toBeNull();
     expect(foundUser?.email).toBe("test@example.com");
   });
 
   it("should get a user by email", async () => {
-    // Créer un utilisateur pour le test
-    const mockUser = new User({
-      email: "test@example.com",
-      password: "password123",
-      firstName: "Test",
-      lastName: "User",
-      authMethod: "email",
-      userReferralCode: "TEST123",
-      formFullfilled: false,
-      wallets: [],
-      kycStatus: "none",
-    });
+    const { user: mockUser } = (await authService.registerWithEmail(
+      "test@example.com",
+      "password123",
+      "Test",
+      "User",
+      undefined,
+      true
+    )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
 
-    await mockUser.save();
-
-    // Tester getUserByEmail
-    const foundUser = await userService.getUserByEmail("test@example.com");
+    const foundUser = (await userService.getUserByEmail(
+      "test@example.com"
+    )) as UserDocument & { _id: mongoose.Types.ObjectId };
     expect(foundUser).not.toBeNull();
     expect(foundUser?._id.toString()).toBe(mockUser._id.toString());
   });
 
   it("should update a user", async () => {
-    // Créer un utilisateur pour le test
-    const mockUser = new User({
-      email: "test@example.com",
-      password: "password123",
-      firstName: "Test",
-      lastName: "User",
-      authMethod: "email",
-      userReferralCode: "TEST123",
-      formFullfilled: false,
-      wallets: [],
-      kycStatus: "none",
-    });
+    const { user: mockUser } = (await authService.registerWithEmail(
+      "test@example.com",
+      "password123",
+      "Test",
+      "User",
+      undefined,
+      true
+    )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
 
-    await mockUser.save();
-
-    // Tester updateUser
     const updatedUser = await userService.updateUser(mockUser._id.toString(), {
       firstName: "Updated",
       lastName: "Name",

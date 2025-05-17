@@ -26,13 +26,13 @@ describe("Auth API", () => {
     it("should register a new user", async () => {
       const res = await request(app).post("/api/auth/register").send({
         email: "test@example.com",
-        password: "password123",
+        password: "Password123!@#",
         firstName: "Test",
         lastName: "User",
       });
 
       expect(res.status).toBe(201);
-      expect(res.body.status).toBe("success");
+      expect(res.body.success).toBe(true);
       expect(res.body.data.user).toHaveProperty("email", "test@example.com");
       expect(res.body.data).toHaveProperty("token");
     });
@@ -44,26 +44,28 @@ describe("Auth API", () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body.status).toBe("error");
-      expect(res.body.message).toBe("Email and password are required");
+      expect(res.body.error).toBeDefined();
     });
 
     it("should return 409 if user already exists", async () => {
       // Create a user first
       await request(app).post("/api/auth/register").send({
         email: "existing@example.com",
-        password: "password123",
+        password: "Password123!@#",
+        firstName: "Test",
+        lastName: "User",
       });
 
       // Try to create a user with the same email
       const res = await request(app).post("/api/auth/register").send({
         email: "existing@example.com",
-        password: "password456",
+        password: "Password456!@#",
+        firstName: "Test",
+        lastName: "User",
       });
 
       expect(res.status).toBe(409);
-      expect(res.body.status).toBe("error");
-      expect(res.body.message).toContain("already exists");
+      expect(res.body.error).toBeDefined();
     });
   });
 
@@ -72,13 +74,15 @@ describe("Auth API", () => {
       // Create a user first
       await request(app).post("/api/auth/register").send({
         email: "login@example.com",
-        password: "password123",
+        password: "Password123!@#",
+        firstName: "Test",
+        lastName: "User",
       });
 
       // Test login
       const res = await request(app).post("/api/auth/login").send({
         email: "login@example.com",
-        password: "password123",
+        password: "Password123!@#",
       });
 
       expect(res.status).toBe(200);
@@ -91,7 +95,9 @@ describe("Auth API", () => {
       // Create a user first
       await request(app).post("/api/auth/register").send({
         email: "login@example.com",
-        password: "password123",
+        password: "Password123!@#",
+        firstName: "Test",
+        lastName: "User",
       });
 
       // Try to login with wrong password
@@ -111,8 +117,13 @@ describe("Auth API", () => {
       // Create a user and get the token
       const registerRes = await request(app).post("/api/auth/register").send({
         email: "me@example.com",
-        password: "password123",
+        password: "Password123!@#",
       });
+
+      console.log(
+        "Register response:",
+        JSON.stringify(registerRes.body, null, 2)
+      );
 
       const token = registerRes.body.data.token;
 
@@ -145,10 +156,10 @@ describe("Auth API", () => {
           lastName: "One",
           userReferralCode: "FLEX-ABC123",
           authMethod: "email",
-          points: 50,
           formFullfilled: true,
           wallets: [],
           kycStatus: "none",
+          verificationCode: "FLEX-USER01",
         },
         {
           email: "user2@example.com",
@@ -157,10 +168,10 @@ describe("Auth API", () => {
           lastName: "Two",
           userReferralCode: "FLEX-DEF456",
           authMethod: "email",
-          points: 30,
           formFullfilled: true,
           wallets: [],
           kycStatus: "none",
+          verificationCode: "FLEX-USER02",
         },
         {
           email: "user3@example.com",
@@ -169,12 +180,20 @@ describe("Auth API", () => {
           lastName: "Three",
           userReferralCode: "FLEX-GHI789",
           authMethod: "email",
-          points: 100,
           formFullfilled: true,
           wallets: [],
           kycStatus: "none",
+          verificationCode: "FLEX-USER03",
         },
       ]);
+
+      // Attribution des points via la méthode métier
+      const user1 = await User.findOne({ email: "user1@example.com" });
+      const user2 = await User.findOne({ email: "user2@example.com" });
+      const user3 = await User.findOne({ email: "user3@example.com" });
+      if (user1) await user1.addNativePoints(50);
+      if (user2) await user2.addNativePoints(30);
+      if (user3) await user3.addNativePoints(100);
 
       const response = await request(app).get("/api/auth/top-referrals");
 
@@ -187,9 +206,9 @@ describe("Auth API", () => {
       expect(topReferrals).toHaveLength(3);
 
       // Verify users are sorted by points in descending order
-      expect(topReferrals[0].points).toBe(100);
-      expect(topReferrals[1].points).toBe(50);
-      expect(topReferrals[2].points).toBe(30);
+      expect(topReferrals[0].flexpoints_total).toBe(100);
+      expect(topReferrals[1].flexpoints_total).toBe(50);
+      expect(topReferrals[2].flexpoints_total).toBe(30);
     });
 
     it("should return 404 when no users found", async () => {

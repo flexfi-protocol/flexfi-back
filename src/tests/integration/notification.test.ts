@@ -3,7 +3,7 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 import request from "supertest";
 import NotificationModel, { NotificationType } from "../../models/Notification";
-import { IUser, User } from "../../models/User";
+import { User } from "../../models/User";
 import * as notificationService from "../../services/notificationService";
 import { eventEmitter, EventType } from "../../utils/eventEmitter";
 
@@ -99,7 +99,7 @@ app.put("/api/notifications/read-all", async (req: any, res: any) => {
 
 describe("Notification System Integration Test", () => {
   let mongoServer: MongoMemoryServer;
-  let testUser: IUser;
+  let testUser: import("../../models/User").UserDocument;
   let userId: string;
 
   beforeAll(async () => {
@@ -130,9 +130,10 @@ describe("Notification System Integration Test", () => {
       kycStatus: "none",
       userReferralCode: "NOTIF123",
       formFullfilled: false,
+      verificationCode: "FLEX-NOTIF1",
     });
 
-    userId = testUser._id.toString();
+    userId = (testUser._id as mongoose.Types.ObjectId).toString();
   });
 
   afterAll(async () => {

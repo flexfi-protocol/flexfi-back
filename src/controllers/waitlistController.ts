@@ -5,7 +5,7 @@ import waitlistService from "../services/waitlistService";
 
 export class WaitlistController {
   // Register a new user in the waitlist
-  async registerWaitlistUser(
+  async registerFormUser(
     req: Request,
     res: Response,
     next: NextFunction
@@ -20,8 +20,9 @@ export class WaitlistController {
         formData: formDataWithoutEmail,
       };
 
-      const updatedUser: UserDocument =
-        await waitlistService.registerWaitlistInfos(userData);
+      const updatedUser: UserDocument = await waitlistService.registerFormInfos(
+        userData
+      );
 
       const userResponse = {
         _id: updatedUser._id,

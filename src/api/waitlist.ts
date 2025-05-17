@@ -10,7 +10,7 @@ const router = Router();
 router.post(
   "/",
   validate(registerWaitlistUserValidation),
-  waitlistController.registerWaitlistUser
+  waitlistController.registerFormUser
 );
 
 // Get total number of users in the waitlist

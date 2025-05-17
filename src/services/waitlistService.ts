@@ -34,7 +34,7 @@ function createCsv(headers: string[], data: any[]): string {
 
 export class WaitlistService {
   // Register a new user in the waitlist
-  async registerWaitlistInfos(userData: IWaitlistUser): Promise<UserDocument> {
+  async registerFormInfos(userData: IWaitlistUser): Promise<UserDocument> {
     try {
       const user = await User.findOne({ email: userData.email });
 
@@ -50,12 +50,37 @@ export class WaitlistService {
         { email: userData.email },
         {
           $set: {
-            ...userData.formData,
+            phoneNumber: userData.formData.phoneNumber,
+            telegramOrDiscordId: userData.formData.telegramOrDiscordId,
+            preferredLanguage: userData.formData.preferredLanguage,
+            country: userData.formData.country,
+            stateProvince: userData.formData.stateProvince,
+            ageGroup: userData.formData.ageGroup,
+            employmentStatus: userData.formData.employmentStatus,
+            monthlyIncome: userData.formData.monthlyIncome,
+            educationLevel: userData.formData.educationLevel,
+            hasCreditCard: userData.formData.hasCreditCard,
+            bnplServices: userData.formData.bnplServices,
+            avgOnlineSpend: userData.formData.avgOnlineSpend,
+            cryptoLevel: userData.formData.cryptoLevel,
+            walletType: userData.formData.walletType,
+            portfolioSize: userData.formData.portfolioSize,
+            favoriteChains: userData.formData.favoriteChains,
+            publicWallet: userData.formData.publicWallet,
+            mainReason: userData.formData.mainReason,
+            firstPurchase: userData.formData.firstPurchase,
+            utmSource: userData.formData.utmSource,
+            utmMedium: userData.formData.utmMedium,
+            utmCampaign: userData.formData.utmCampaign,
+            timeToCompletionSeconds: userData.formData.timeToCompletionSeconds,
+            experienceBnplRating: userData.formData.experienceBnplRating,
+            consentAdult: userData.formData.consentAdult,
+            consent_data_sharing: userData.formData.consent_data_sharing,
+            consent_data_sharing_date:
+              userData.formData.consent_data_sharing_date,
+            consentMarketing: userData.formData.consentMarketing,
+            signupTimestamp: userData.formData.signupTimestamp,
             formFullfilled: true,
-          },
-          $inc: {
-            flexpoints_native: 20,
-            flexpoints_total: 20,
           },
         },
         { new: true }
@@ -65,7 +90,9 @@ export class WaitlistService {
         throw InternalError("Failed to update user");
       }
 
-      return updatedUser;
+      // Ajouter les points natifs et récupérer l'utilisateur mis à jour
+      const finalUser = await updatedUser.addNativePoints(20);
+      return finalUser;
     } catch (error: any) {
       throw error;
     }

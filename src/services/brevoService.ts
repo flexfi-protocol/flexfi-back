@@ -2,6 +2,8 @@ import * as SibApiV3Sdk from "@sendinblue/client";
 
 import env from "../config/env";
 import { User, UserDocument } from "../models/User";
+import authService from "./authService";
+import logger from "../utils/logger";
 
 const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 apiInstance.setApiKey(
@@ -64,6 +66,46 @@ export class BrevoService {
     user.resetToken = resetToken;
     await user.save();
     return resetToken;
+  }
+
+  /**
+   * Send a template email using Brevo API
+   * @param to Recipient email address
+   * @param subject Email subject
+   * @param templateName Template name (must be configured in Brevo)
+   * @param templateData Data to be used in the template
+   */
+  async sendTemplateEmail(
+    to: string,
+    subject: string,
+    templateName: string,
+    templateData: Record<string, any>
+  ): Promise<void> {
+    try {
+      // Map template name to template ID
+      const templateIdMap: Record<string, number> = {
+        signup: parseInt(env.BREVO_TEMPLATE_SIGNUP_ID),
+        "reset-password": parseInt(env.BREVO_TEMPLATE_RESET_PASSWORD_ID),
+        "zealy-connection": parseInt(env.BREVO_TEMPLATE_ZEALY_ID || "0"),
+      };
+
+      const templateId = templateIdMap[templateName];
+      if (!templateId) {
+        throw new Error(`Unknown email template: ${templateName}`);
+      }
+
+      const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+      sendSmtpEmail.to = [{ email: to }];
+      sendSmtpEmail.subject = subject;
+      sendSmtpEmail.templateId = templateId;
+      sendSmtpEmail.params = templateData;
+
+      await apiInstance.sendTransacEmail(sendSmtpEmail);
+      logger.info(`Template email '${templateName}' sent to ${to}`);
+    } catch (error) {
+      logger.error(`Failed to send template email:`, error);
+      throw new Error(`Failed to send template email: ${error}`);
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import request from "supertest";
 import app from "../../app";
 import KYC from "../../models/KYC";
+import type { UserDocument } from "../../models/User";
 import { User } from "../../models/User";
 
 jest.mock("../../utils/logger");
@@ -26,7 +27,7 @@ describe("KYC Webhook API", () => {
     await mongoose.connect(uri);
 
     // Create test user and KYC record
-    const user = await User.create({
+    const user: UserDocument = await User.create({
       email: "webhook-test@example.com",
       password: "password123",
       firstName: "Webhook",
@@ -36,9 +37,10 @@ describe("KYC Webhook API", () => {
       userReferralCode: "FLEX-ABC123",
       formFullfilled: false,
       wallets: [],
+      verificationCode: "FLEX-TEST01",
     });
 
-    userId = user._id;
+    userId = user._id as mongoose.Types.ObjectId;
 
     const kyc = await KYC.create({
       userId,

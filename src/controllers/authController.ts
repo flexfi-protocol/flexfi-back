@@ -1,7 +1,33 @@
 import { NextFunction, Request, Response } from "express";
-import { IBasicUser, UserDocument } from "../models/User";
+import { UserDocument } from "../models/User";
 import authService from "../services/authService";
+import notificationService from "../services/notificationService";
+import { AppError } from "../utils/AppError";
 import logger from "../utils/logger";
+import { validateEmail, validatePassword } from "../utils/validators";
+
+// Helper function to send Zealy connection email after successful registration
+const sendZealyConnectionEmail = async (userId: string): Promise<void> => {
+  try {
+    // Wait a bit to ensure the user is fully registered
+    setTimeout(async () => {
+      try {
+        await notificationService.sendZealyConnectionEmail(userId);
+      } catch (error) {
+        logger.error(
+          `Failed to send Zealy connection email to user ${userId}:`,
+          error
+        );
+        // Don't throw error here, as this is a background task
+      }
+    }, 5000);
+  } catch (error) {
+    logger.error(
+      `Error scheduling Zealy connection email for user ${userId}:`,
+      error
+    );
+  }
+};
 
 export class AuthController {
   // Inscription avec email/mot de passe
@@ -11,18 +37,19 @@ export class AuthController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const {
-        email,
-        firstName,
-        lastName,
-        password,
-        referralCodeUsed,
-      }: IBasicUser = req.body;
+      const { email, firstName, lastName, password, referralCodeUsed } =
+        req.body;
 
-      if (!email || !password) {
+      // Validate email and password
+      if (!validateEmail(email)) {
+        res.status(400).json({ error: "Invalid email format" });
+        return;
+      }
+
+      if (!validatePassword(password)) {
         res.status(400).json({
-          status: "error",
-          message: "Email and password are required",
+          error:
+            "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character",
         });
         return;
       }
@@ -52,32 +79,40 @@ export class AuthController {
           deviceLocale
         );
 
-      // Ne pas renvoyer le mot de passe dans la réponse
-      const userResponse = {
-        _id: user._id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        authMethod: user.authMethod,
-        wallets: user.wallets,
-        kycStatus: user.kycStatus,
-        formFullfilled: user.formFullfilled,
-        userReferralCode: user.userReferralCode,
-        isVerified: user.isVerified,
-      };
-
-      // Handle referral points
-      if (referralCodeUsed) {
-        await authService.handleReferralPoints(referralCodeUsed);
+      // Schedule sending the Zealy connection email
+      if (user && user._id) {
+        await sendZealyConnectionEmail(user._id.toString());
       }
 
+      // Return success response
       res.status(201).json({
-        status: "success",
-        data: { user: userResponse, token },
+        success: true,
+        data: {
+          user: {
+            _id: user._id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            isVerified: user.isVerified,
+            userReferralCode: user.userReferralCode,
+            formFullfilled: user.formFullfilled,
+          },
+          token: token,
+        },
+        message:
+          "Registration successful. Please check your email for verification.",
       });
-    } catch (error) {
-      // Passer l'erreur au middleware de gestion d'erreurs global
-      next(error);
+    } catch (error: any) {
+      logger.error("Registration error:", error);
+      if (
+        error &&
+        error.message &&
+        error.message.includes("User already exists")
+      ) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      next(new AppError(error.message, 400));
     }
   }
 
@@ -339,7 +374,7 @@ export class AuthController {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        points: user.flexpoints_total,
+        flexpoints_total: user.flexpoints_total,
         userReferralCode: user.userReferralCode,
       }));
 

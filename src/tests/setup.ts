@@ -2,7 +2,7 @@
 import dotenv from "dotenv";
 
 // Charger les variables d'environnement pour les tests
-dotenv.config({ path: ".env.test.example" });
+dotenv.config({ path: ".env.test" });
 
 // Export a function for globalSetup
 module.exports = async () => {

@@ -51,7 +51,7 @@ router.get("/rank", authenticate, authController.getUserRank);
 router.post("/send-code", brevoController.sendVerificationCode);
 
 // Route pour vérifier le code de vérification
-router.post("/verify-code/:id", authController.verifyVerificationCode);
+router.post("/activate/:id", authController.verifyVerificationCode);
 
 router.post("/resend-verification", authController.resendVerificationEmail);
 

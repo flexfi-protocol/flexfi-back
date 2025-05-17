@@ -3,6 +3,8 @@ import Notification, { NotificationType, INotification, INotificationData } from
 import { EventType, EventData, eventEmitter, eventToNotificationMap } from '../utils/eventEmitter';
 import logger from '../utils/logger';
 import { AppError } from '../utils/AppError';
+import { User } from '../models/User';
+import brevoService from './brevoService';
 
 /**
  * Creates a new notification
@@ -294,5 +296,62 @@ export default {
   getUserNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
-  processEvent
+  processEvent,
+  // Send email using Brevo service
+  async sendEmail(emailData: {
+    to: string;
+    subject: string;
+    template: {
+      name: string;
+      data: Record<string, any>;
+    };
+  }): Promise<void> {
+    try {
+      await brevoService.sendTemplateEmail(
+        emailData.to,
+        emailData.subject,
+        emailData.template.name,
+        emailData.template.data
+      );
+    } catch (error) {
+      logger.error('Failed to send email:', error);
+      throw error;
+    }
+  },
+  // Add a method to send Zealy connection email notification
+  async sendZealyConnectionEmail(userId: string): Promise<void> {
+    try {
+      const user = await User.findById(userId);
+      if (!user || !user.email) {
+        throw new Error("User not found or has no email");
+      }
+
+      // Check if user already has a Zealy account connected
+      if (user.zealy_id) {
+        logger.debug(`User ${userId} already has a Zealy account connected, skipping email`);
+        return;
+      }
+
+      // Prepare email data
+      const emailData = {
+        to: user.email,
+        subject: "Earn more FlexPoints with Zealy!",
+        template: {
+          name: "zealy-connection",
+          data: {
+            firstName: user.firstName || "FlexFi User",
+            zealyConnectUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/api/zealy/connect`,
+            currentPoints: user.flexpoints_total || 0
+          }
+        }
+      };
+
+      // Send the email
+      await this.sendEmail(emailData);
+      logger.info(`Zealy connection email sent to user ${userId}`);
+    } catch (error) {
+      logger.error(`Failed to send Zealy connection email to user ${userId}:`, error);
+      throw error;
+    }
+  }
 }; 

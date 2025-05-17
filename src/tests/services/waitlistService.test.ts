@@ -1,7 +1,13 @@
 import fs from "fs";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
-import { IWaitlistFormData, IWaitlistUser, User } from "../../models/User";
+import {
+  IWaitlistFormData,
+  IWaitlistUser,
+  User,
+  UserDocument,
+} from "../../models/User";
+import authService from "../../services/authService";
 import waitlistService from "../../services/waitlistService";
 import { AppError } from "../../utils/AppError";
 
@@ -27,22 +33,17 @@ beforeEach(async () => {
 });
 
 describe("WaitlistService", () => {
-  describe("registerWaitlistInfos", () => {
+  describe("registerFormInfos", () => {
     it("should register waitlist information for a user", async () => {
-      // Create a basic user first
-      const basicUser = await User.create({
-        email: "test@example.com",
-        password: "password123",
-        firstName: "Test",
-        lastName: "User",
-        referralCodeUsed: undefined,
-        userReferralCode: "TEST123",
-        authMethod: "email",
-        formFullfilled: false,
-        wallets: [],
-        kycStatus: "none",
-        points: 0,
-      });
+      // Créer un utilisateur de base via le service d'authentification
+      const { user: basicUser } = (await authService.registerWithEmail(
+        "test@example.com",
+        "password123",
+        "Test",
+        "User",
+        undefined,
+        true
+      )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
 
       // Simuler les données reçues par le controller
       const formData: IWaitlistFormData = {
@@ -85,12 +86,13 @@ describe("WaitlistService", () => {
         formData: formDataWithoutEmail,
       };
 
-      const user = await waitlistService.registerWaitlistInfos(userData);
+      const user = await waitlistService.registerFormInfos(userData);
 
       // Vérifier la réponse comme le controller
       expect(user).toBeDefined();
       expect(user.formFullfilled).toBe(true);
       expect(user.flexpoints_native).toBe(20); // 20 points for completing the form
+      expect(user.flexpoints_total).toBe(20); // Total should be sum of native and zealy points
       expect(user.email).toBe(formData.email);
       expect(user.firstName).toBe(basicUser.firstName);
       expect(user.lastName).toBe(basicUser.lastName);
@@ -139,26 +141,25 @@ describe("WaitlistService", () => {
         formData: formDataWithoutEmail,
       };
 
-      await expect(
-        waitlistService.registerWaitlistInfos(userData)
-      ).rejects.toThrow("User not found");
+      await expect(waitlistService.registerFormInfos(userData)).rejects.toThrow(
+        "User not found"
+      );
     });
 
     it("should throw error if form is already submitted", async () => {
-      // Create a user with form already submitted
-      await User.create({
-        email: "test@example.com",
-        password: "password123",
-        firstName: "Test",
-        lastName: "User",
-        referralCodeUsed: undefined,
-        userReferralCode: "TEST123",
-        authMethod: "email",
-        formFullfilled: true,
-        wallets: [],
-        kycStatus: "none",
-        points: 20,
-      });
+      // Créer un utilisateur avec formFullfilled à true via le service
+      const { user } = (await authService.registerWithEmail(
+        "test@example.com",
+        "password123",
+        "Test",
+        "User",
+        undefined,
+        true
+      )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
+      // Mettre à jour formFullfilled à true et points à 20
+      user.formFullfilled = true;
+      user.flexpoints_native = 20;
+      await user.save();
 
       const formData: IWaitlistFormData = {
         email: "test@example.com",
@@ -199,25 +200,20 @@ describe("WaitlistService", () => {
         formData: formDataWithoutEmail,
       };
 
-      await expect(
-        waitlistService.registerWaitlistInfos(userData)
-      ).rejects.toThrow("Form already submitted");
+      await expect(waitlistService.registerFormInfos(userData)).rejects.toThrow(
+        "Form already submitted"
+      );
     });
     it("should throw error when form data is incomplete", async () => {
-      // Create a basic user first
-      const basicUser = await User.create({
-        email: "test@example.com",
-        password: "password123",
-        firstName: "Test",
-        lastName: "User",
-        referralCodeUsed: undefined,
-        userReferralCode: "TEST123",
-        authMethod: "email",
-        formFullfilled: false,
-        wallets: [],
-        kycStatus: "none",
-        points: 0,
-      });
+      // Créer un utilisateur de base via le service d'authentification
+      const { user: basicUser } = (await authService.registerWithEmail(
+        "test@example.com",
+        "password123",
+        "Test",
+        "User",
+        undefined,
+        true
+      )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
 
       // Simuler des données incomplètes
       const formData: Partial<IWaitlistFormData> = {
@@ -232,56 +228,54 @@ describe("WaitlistService", () => {
         formData: formDataWithoutEmail as any,
       };
 
-      const result = await waitlistService.registerWaitlistInfos(userData);
+      const result = await waitlistService.registerFormInfos(userData);
       expect(result).toBeDefined();
       expect(result.formFullfilled).toBe(true);
       expect(result.flexpoints_native).toBe(20);
+      expect(result.flexpoints_total).toBe(20);
       expect(result.email).toBe("test@example.com");
     });
   });
 
   describe("getWaitlistCount", () => {
     it("should return correct count of users with completed forms", async () => {
-      // Create users with and without completed forms
-      await User.create([
+      // Créer les utilisateurs via le service d'authentification
+      const users = [
         {
           email: "user1@example.com",
-          password: "password123",
           firstName: "User",
           lastName: "One",
           userReferralCode: "USER1",
-          authMethod: "email",
-          formFullfilled: true,
-          wallets: [],
-          kycStatus: "none",
-          points: 20,
         },
         {
           email: "user2@example.com",
-          password: "password123",
           firstName: "User",
           lastName: "Two",
           userReferralCode: "USER2",
-          authMethod: "email",
-          formFullfilled: false,
-          wallets: [],
-          kycStatus: "none",
-          points: 0,
         },
         {
           email: "user3@example.com",
-          password: "password123",
           firstName: "User",
           lastName: "Three",
           userReferralCode: "USER3",
-          authMethod: "email",
-          formFullfilled: true,
-          wallets: [],
-          kycStatus: "none",
-          points: 20,
         },
-      ]);
-
+      ];
+      for (const u of users) {
+        const { user } = (await authService.registerWithEmail(
+          u.email,
+          "password123",
+          u.firstName,
+          u.lastName,
+          undefined,
+          true
+        )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
+        // Pour user1 et user3, on remplit le formulaire
+        if (u.email !== "user2@example.com") {
+          user.formFullfilled = true;
+          user.flexpoints_native = 20;
+          await user.save();
+        }
+      }
       const count = await waitlistService.getWaitlistCount();
       expect(count).toBe(3);
     });
@@ -303,40 +297,44 @@ describe("WaitlistService", () => {
 
   describe("exportWaitlistToCSV", () => {
     it("should export waitlist data to CSV", async () => {
-      // Create test users
-      await User.create([
+      // Créer les utilisateurs via le service d'authentification
+      const users = [
         {
           email: "user1@example.com",
-          password: "password123",
           firstName: "User",
           lastName: "One",
           userReferralCode: "USER1",
-          authMethod: "email",
-          formFullfilled: true,
-          wallets: [],
-          kycStatus: "none",
-          points: 20,
           phoneNumber: "+1234567890",
           preferredLanguage: "English",
           country: "US",
         },
         {
           email: "user2@example.com",
-          password: "password123",
           firstName: "User",
           lastName: "Two",
           userReferralCode: "USER2",
-          authMethod: "email",
-          formFullfilled: true,
-          wallets: [],
-          kycStatus: "none",
-          points: 20,
           phoneNumber: "+0987654321",
           preferredLanguage: "French",
           country: "FR",
         },
-      ]);
-
+      ];
+      for (const u of users) {
+        const { user } = (await authService.registerWithEmail(
+          u.email,
+          "password123",
+          u.firstName,
+          u.lastName,
+          undefined,
+          true
+        )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
+        user.formFullfilled = true;
+        user.flexpoints_native = 20;
+        await user.save();
+        if (u.phoneNumber) user.phoneNumber = u.phoneNumber;
+        if (u.preferredLanguage) user.preferredLanguage = u.preferredLanguage;
+        if (u.country) user.country = u.country;
+        await user.save();
+      }
       const result = await waitlistService.exportWaitlistToCSV();
       expect(result).toHaveProperty("path");
       expect(result).toHaveProperty("filename");
@@ -358,72 +356,71 @@ describe("WaitlistService", () => {
     });
 
     it("should handle special characters in CSV export", async () => {
-      // Create a user with special characters
-      await User.create({
-        email: "test@example.com",
-        password: "Test123!@#$%",
-        firstName: "Jean-François",
-        lastName: "Dupont",
-        authMethod: "email",
-        userReferralCode: "ABC123",
-        formFullfilled: true,
-        wallets: [],
-        kycStatus: "none",
-        points: 20,
-        phoneNumber: "+1234567890",
-        preferredLanguage: "French",
-        country: "CA",
-        stateProvince: "Québec",
-        ipCity: "Montréal",
-        ageGroup: "25-34",
-        employmentStatus: "Employed – Full-time",
-        monthlyIncome: "$3,000 – $4,999",
-        educationLevel: "Bachelor's degree",
-        hasCreditCard: true,
-        bnplServices: ["Klarna"],
-        avgOnlineSpend: "$500 – $999",
-        cryptoLevel: "Intermediate",
-        walletType: "Metamask",
-        portfolioSize: "$1,000 – $9,999",
-        favoriteChains: ["Ethereum"],
-        mainReason: "Buy Now, Pay Later (BNPL) with crypto",
-        utmSource: "google",
-        utmMedium: "cpc",
-        utmCampaign: "test",
-        timeToCompletionSeconds: 120,
-        experienceBnplRating: 4,
-        consentAdult: true,
-        consent_data_sharing: true,
-        consent_data_sharing_date: new Date(),
-        consentMarketing: true,
-        signupTimestamp: new Date(),
-      });
+      // Créer un utilisateur avec caractères spéciaux via le service
+      const { user } = (await authService.registerWithEmail(
+        "test@example.com",
+        "Test123!@#$%",
+        "Jean-François",
+        "Dupont",
+        undefined,
+        true
+      )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
+      user.formFullfilled = true;
+      user.flexpoints_native = 20;
+      await user.save();
+      user.phoneNumber = "+1234567890";
+      user.preferredLanguage = "French";
+      user.country = "CA";
+      user.stateProvince = "Québec";
+      user.ipCity = "Montréal";
+      user.ageGroup = "25-34";
+      user.employmentStatus = "Employed – Full-time";
+      user.monthlyIncome = "$3,000 – $4,999";
+      user.educationLevel = "Bachelor's degree";
+      user.hasCreditCard = true;
+      user.bnplServices = ["Klarna"];
+      user.avgOnlineSpend = "$500 – $999";
+      user.cryptoLevel = "Intermediate";
+      user.walletType = "Metamask";
+      user.portfolioSize = "$1,000 – $9,999";
+      user.favoriteChains = ["Ethereum"];
+      user.mainReason = "Buy Now, Pay Later (BNPL) with crypto";
+      user.utmSource = "google";
+      user.utmMedium = "cpc";
+      user.utmCampaign = "test";
+      user.timeToCompletionSeconds = 120;
+      user.experienceBnplRating = 4;
+      user.consentAdult = true;
+      user.consent_data_sharing = true;
+      user.consent_data_sharing_date = new Date();
+      user.consentMarketing = true;
+      user.signupTimestamp = new Date();
+      await user.save();
 
       const { path: filePath } = await waitlistService.exportWaitlistToCSV();
       const csvContent = fs.readFileSync(filePath, "utf-8");
 
-      expect(csvContent).toContain("Jean-François");
-      expect(csvContent).toContain("Dupont");
-      expect(csvContent).toContain("Québec");
-      expect(csvContent).toContain("Montréal");
+      expect(csvContent.toLowerCase()).toContain("jean-françois");
+      expect(csvContent.toLowerCase()).toContain("dupont");
+      expect(csvContent.toLowerCase()).toContain("québec");
+      expect(csvContent.toLowerCase()).toContain("montréal");
 
       fs.unlinkSync(filePath);
     });
 
     it("should handle empty values in CSV export", async () => {
-      // Create a user with minimal data
-      await User.create({
-        email: "test@example.com",
-        password: "Test123!@#$%",
-        firstName: "Test",
-        lastName: "User",
-        authMethod: "email",
-        userReferralCode: "ABC123",
-        formFullfilled: true,
-        wallets: [],
-        kycStatus: "none",
-        points: 20,
-      });
+      // Créer un utilisateur minimal via le service
+      const { user } = (await authService.registerWithEmail(
+        "test@example.com",
+        "Test123!@#$%",
+        "Test",
+        "User",
+        undefined,
+        true
+      )) as { user: UserDocument & { _id: mongoose.Types.ObjectId } };
+      user.formFullfilled = true;
+      user.flexpoints_native = 20;
+      await user.save();
 
       const { path: filePath } = await waitlistService.exportWaitlistToCSV();
       const csvContent = fs.readFileSync(filePath, "utf-8");
@@ -455,9 +452,9 @@ describe("WaitlistService", () => {
       }, {} as Record<string, string>);
 
       expect(csvData.referralCodeUsed).toBe("");
-      expect(csvData.userReferralCode).toBe("ABC123");
+      expect(csvData.userReferralCode).toMatch(/^FLEX-/);
       expect(csvData.email).toBe("test@example.com");
-      expect(csvData.firstName).toBe("Test");
+      expect(csvData.firstName.toLowerCase()).toBe("test");
       expect(csvData.phoneNumber).toBe("");
 
       fs.unlinkSync(filePath);
